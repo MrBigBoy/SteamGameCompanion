@@ -12,25 +12,30 @@ namespace SteamGameCompanion
 {
     public partial class Form1 : Form
     {
+        // The ApiKey to Steam
         private const string ApiKey = "664ADD673683CA973C09A043C939CA53";
 
+        /**
+         * The contructor of the WinForm app
+         */
         public Form1()
         {
             WebRequest.DefaultWebProxy = null;
             InitializeComponent();
         }
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
-
+        /**
+         * This method override the onLoad and call the place app method
+         */
         protected override void OnLoad(EventArgs e)
         {
             PlaceLowerRight();
             base.OnLoad(e);
         }
 
+        /**
+         * This method loads the widget to the lower right corner
+         */
         private void PlaceLowerRight()
         {
             //Determine = "rightmost" screen
@@ -45,12 +50,18 @@ namespace SteamGameCompanion
             Top = rightmost.WorkingArea.Bottom - Height;
         }
 
+        /**
+         * This method is called when the Search button is pressed
+         */
         private void button1_Click(object sender, EventArgs e)
         {
             GameListBox.Items.Clear();
             Search();
         }
 
+        /**
+         * This method return the id64 key from the custom username from steam
+         */
         private long GetId64(string customUserName)
         {
             long id64;
@@ -77,6 +88,9 @@ namespace SteamGameCompanion
             return id64;
         }
 
+        /**
+         * This method return the gamelist representing the id64 key
+         */
         private IEnumerable<Game> GetGameList(long id64)
         {
             const string baseUrl = "http://api.steampowered.com";
@@ -91,31 +105,47 @@ namespace SteamGameCompanion
             return response.Data.response.games;
         }
 
+        /**
+         * This function is called the Run Game button is pressed
+         * It will load the selected game on the listBox in Steam
+         */
         private void button2_Click(object sender, EventArgs e)
         {
-            var game = (Game) GameListBox.SelectedItem;
+            var game = (Game)GameListBox.SelectedItem;
             string str = $"Steam://run/{game.appid}";
             Process.Start(str);
         }
 
+        /**
+         * This method is runned when the search button is pressed
+         * It will get the two textfields and load a gamelist representing the two user mutual game list
+         */
         private void Search()
         {
-            var id164 = GetId64(Id1TextBox.Text);
-            var id264 = GetId64(Id2TextBox.Text);
-            var games1 = GetGameList(id164);
-            var games2 = GetGameList(id264);
+            // Get the id from the textbox
+            var id1 = Id1TextBox.Text;
+            var id2 = Id1TextBox.Text;
+
+            // Get the id64 key
+            var id164 = GetId64(id1);
+            var id264 = GetId64(id2);
+
+            // Get the game list
+            var games1 = (List<Game>)GetGameList(id164);
+            var games2 = (List<Game>)GetGameList(id264);
+
+            // Compare the two game list
             var diffids = new HashSet<int>(games2.Select(s => s.appid));
             var games = games1.Where(m => diffids.Contains(m.appid)).ToList();
 
+            // Run for each game in the list and load to a listBox
             foreach (var game in games)
             {
-                //var img = GetGameIcon(game);
-
+                // Show the name of the game symbolise the game
                 GameListBox.DisplayMember = game.name;
-                //if(img != null)
-                GameListBox.Items.Add(game);
-                //GetGameIcon(game);
 
+                // Add the game to the list
+                GameListBox.Items.Add(game);
             }
         }
 
