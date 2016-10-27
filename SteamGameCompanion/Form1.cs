@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
 using System.Windows.Forms;
 using Newtonsoft.Json.Linq;
 using RestSharp;
 using System.Linq;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace SteamGameCompanion
 {
@@ -17,6 +16,7 @@ namespace SteamGameCompanion
 
         public Form1()
         {
+            WebRequest.DefaultWebProxy = null;
             InitializeComponent();
         }
 
@@ -48,36 +48,22 @@ namespace SteamGameCompanion
         private void button1_Click(object sender, EventArgs e)
         {
             GameListBox.Items.Clear();
-            var id1 = Id1TextBox.Text;
-            var id2 = Id2TextBox.Text;
-            var id164 = GetId64(id1);
-            var id264 = GetId64(id2);
-            var games1 = GetGameList(id164);
-            var games2 = GetGameList(id264);
-            var games =
-                (from game1 in games1 from game2 in games2 where game1.appid == game2.appid select game1).ToList();
-            var sortedGames = games.OrderBy(o => o.name).ToList();
-            foreach (var game in sortedGames)
-            {
-                GameListBox.DisplayMember = game.name;
-                GameListBox.Items.Add(game);
-                GetGameIcon(game);
-            }
+            Search();
         }
 
         private long GetId64(string customUserName)
         {
             long id64;
-
-            try
+            var isNumber = Regex.IsMatch(customUserName, @"^\d+$");
+            if (isNumber)
             {
                 id64 = long.Parse(customUserName);
             }
-            catch
+            else
             {
                 string url =
                     $"http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key={ApiKey}&VanityURL={customUserName}";
-                using (var webClient = new System.Net.WebClient())
+                using (var webClient = new WebClient())
                 {
                     var json = webClient.DownloadString(url);
                     // Now parse with JSON.Net
@@ -107,53 +93,79 @@ namespace SteamGameCompanion
 
         private void button2_Click(object sender, EventArgs e)
         {
-            var game = (Game)GameListBox.SelectedItem;
+            var game = (Game) GameListBox.SelectedItem;
             string str = $"Steam://run/{game.appid}";
             Process.Start(str);
         }
 
-        private Image GetGameIcon(Game game)
+        private void Search()
         {
-            if (game.img_icon_url.Equals(""))
-                return null;
-            string url = $"http://cdn.edgecast.steamstatic.com/steamcommunity/public/images/apps/{game.appid}/{game.img_icon_url}.jpg";
+            var id164 = GetId64(Id1TextBox.Text);
+            var id264 = GetId64(Id2TextBox.Text);
+            var games1 = GetGameList(id164);
+            var games2 = GetGameList(id264);
+            var diffids = new HashSet<int>(games2.Select(s => s.appid));
+            var games = games1.Where(m => diffids.Contains(m.appid)).ToList();
 
-            var filename = game.appid + ".jpg";
-            var img = DownloadRemoteImageFile(url, filename);
-            return img;
-        }
-
-        private Image DownloadRemoteImageFile(string uri, string fileName)
-        {
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(uri);
-            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-
-            // Check that the remote file was found. The ContentType
-            // check is performed since a request for a non-existent
-            // image file might be redirected to a 404-page, which would
-            // yield the StatusCode "OK", even though the image was not
-            // found.
-            if ((response.StatusCode == HttpStatusCode.OK ||
-                response.StatusCode == HttpStatusCode.Moved ||
-                response.StatusCode == HttpStatusCode.Redirect) &&
-                response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase))
+            foreach (var game in games)
             {
+                //var img = GetGameIcon(game);
 
-                // if the remote file was found, download oit
-                using (var inputStream = response.GetResponseStream())
-                using (Stream outputStream = File.OpenWrite(fileName))
-                {
-                    var buffer = new byte[4096];
-                    int bytesRead;
-                    do
-                    {
-                        bytesRead = inputStream.Read(buffer, 0, buffer.Length);
-                        outputStream.Write(buffer, 0, bytesRead);
-                    } while (bytesRead != 0);
-                }
+                GameListBox.DisplayMember = game.name;
+                //if(img != null)
+                GameListBox.Items.Add(game);
+                //GetGameIcon(game);
+
             }
-            var stream = File.OpenRead(fileName);
-            return Image.FromStream(stream);
         }
+
+        /*
+                private Image GetGameIcon(Game game)
+                {
+                    if (game.img_icon_url.Equals(""))
+                        return null;
+                    string url =
+                        $"http://cdn.edgecast.steamstatic.com/steamcommunity/public/images/apps/{game.appid}/{game.img_icon_url}.jpg";
+
+                    var filename = game.appid + ".jpg";
+                    return DownloadRemoteImageFile(url, filename);
+                }
+        */
+
+        /*
+                private Image DownloadRemoteImageFile(string uri, string fileName)
+                {
+                    var request = (HttpWebRequest) WebRequest.Create(uri);
+                    var response = (HttpWebResponse) request.GetResponse();
+
+                    // Check that the remote file was found. The ContentType
+                    // check is performed since a request for a non-existent
+                    // image file might be redirected to a 404-page, which would
+                    // yield the StatusCode "OK", even though the image was not
+                    // found.
+                    if ((response.StatusCode == HttpStatusCode.OK ||
+                         response.StatusCode == HttpStatusCode.Moved ||
+                         response.StatusCode == HttpStatusCode.Redirect) &&
+                        response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase))
+                    {
+
+                        // if the remote file was found, download oit
+                        using (var inputStream = response.GetResponseStream())
+                        using (Stream outputStream = File.OpenWrite(fileName))
+                        {
+                            var buffer = new byte[4096];
+                            var bytesRead = 0;
+                            do
+                            {
+                                if (inputStream == null) continue;
+                                bytesRead = inputStream.Read(buffer, 0, buffer.Length);
+                                outputStream.Write(buffer, 0, bytesRead);
+                            } while (bytesRead != 0);
+                        }
+                    }
+                    var stream = File.OpenRead(fileName);
+                    return Image.FromStream(stream);
+                }
+        */
     }
 }
